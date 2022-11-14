@@ -16,6 +16,7 @@ set.seed(504)
 # source("season_data.R") 
 df <- read_csv("../data/player_stats.csv") %>% clean_names() %>% select(-x1)
 sdf <- df 
+mdf <- df ## do not edit mdf 
 ```
 
 ## Overview
@@ -52,6 +53,7 @@ df <- df %>%
   bake(df)
   
 ```
+
 Now let's take a look at what the distribution of the stats look like overall
 
 ```{r all_stats}
@@ -64,9 +66,10 @@ df %>%
 
 ```
 
-There are some outliers here for sure but lets roll with the data as is. 
+There are some outliers here for sure but lets roll with the data as is.
 
 Before we model with 5 clusters (the same amount of positions on an NBA team) Lets look at the position counts as it stands today.
+
 ```{r}
 sdf %>% 
   group_by(pos) %>%
@@ -126,7 +129,6 @@ for (col in colnames(df[,2:20])) {
 df %>% select(-Y)
 ```
 
-
 ```{r}
 pct <- function(x){
   x/sum(x)
@@ -140,18 +142,88 @@ df %>%
   round(2) 
 
 
+```
+
+After Looking at all this I am going to need a different strategy.
+
+-   I can make a model that predicts given positions and get it really good then have it predict the players and cluster them that way
+-   I can grab only starters and try this again because the current model is really good at predicting playing time/impact.
+
+We'll go with the latter first then the former if I don't like those outcomes either.
+
+Here are some charts showing us Minutes Played and Games Started
+
+```{r gs_mp_charts, echo=FALSE, message=FALSE, warning=FALSE}
+
+mdf %>% 
+  ggplot(aes(mp)) +
+  geom_density() +
+  xlab("Minutes Played") +
+  theme_classic()
+
+
+mdf %>% 
+  ggplot(aes(mp, fill = pos )) +
+  geom_density() +
+  xlab("Minutes Played") +
+  theme_classic()
+
+mdf %>% 
+  select(pos, mp) %>% 
+  ggplot(aes(mp, fill = pos)) +  
+  geom_density() +
+  xlab("Minutes Played") +
+  theme_classic() +
+  facet_wrap(~pos)
+
+mdf %>% 
+  ggplot(aes(gs)) +
+  geom_density() +
+  xlab("Games Started") +
+  theme_classic()
+
+
+mdf %>% 
+  ggplot(aes(gs, fill = pos )) +
+  geom_density() +
+  xlab("Games Started") +
+  theme_classic()
+
+mdf %>% 
+  ggplot(aes(gs, fill = pos)) +  
+  geom_density() +
+  xlab("Games Started") +
+  theme_classic() +
+  facet_wrap(~pos)
+
+mean_gs <- mean(mdf$gs)
 
 ```
 
+we can see that the mean number of games started is `r mean_gs` so I'll make `r ceiling(mean_gs)` The cutoff for being called a starter.
+
+```{r starters, echo=FALSE, message=FALSE, warning=FALSE}
+starters <- mdf %>% 
+  filter(gs >= ceiling(mean_gs))
+
+```
+
+This leaves us with `r length(starters$player)` In a perfect world we would have 150
+
+```{r starters_x_pos, echo=FALSE, message=FALSE, warning=FALSE}
+
+starters %>% 
+  group_by(pos) %>%
+  summarise(n = n()) %>% 
+  ggplot(aes(n, pos, fill = pos)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
 
 
+```
 
+Now let's begin to train a model to id position
 
-
-
-
-
-
-
+## TODO: Train an xgboost
 
 
