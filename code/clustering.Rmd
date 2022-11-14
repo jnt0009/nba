@@ -1,0 +1,157 @@
+```{r setup, message=FALSE, include=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  "readr",
+  "dplyr",
+  "tidyverse",
+  "rvest",
+  "janitor",
+  "recipes",
+  "tidyr",
+  "ggplot2"
+)
+
+
+set.seed(504)
+# source("season_data.R") 
+df <- read_csv("../data/player_stats.csv") %>% clean_names() %>% select(-x1)
+sdf <- df 
+```
+
+## Overview
+
+So the idea here is that we are going group NBA players into like group using a clustering algorithm The data is scraped from [Basketball Reference](https://www.basketball-reference.com/leagues/NBA_2023_per_game.html)
+
+Lets take a look at our data.
+
+```{r head, echo=FALSE}
+df %>% head()
+```
+
+First we need to decide what columns to keep
+
+```{r dictionary, include=FALSE}
+keep <- c("player", "pos", "age", "g", "gs", "mp", "fg", "fga",
+          "x3p", "x3pa", "x2p", "x2pa", "ft", "fta", "orb", "drb",
+          "ast", "stl", "blk", "tov", "pts")
+
+df <- df %>% select(all_of(keep))
+```
+
+```{r peak, echo=FALSE}
+df %>% head()
+```
+
+Next we need to encode some of these categorical values.
+
+```{r encode, echo=FALSE, warning=TRUE}
+df <- df %>%  
+  recipe(~ . ) %>% 
+  step_dummy(pos, one_hot = TRUE) %>% 
+  prep() %>% 
+  bake(df)
+  
+```
+Now let's take a look at what the distribution of the stats look like overall
+
+```{r all_stats}
+df %>% 
+  pivot_longer(where(is.numeric)) %>% 
+  ggplot(aes(value)) +
+  geom_boxplot() +
+  theme_classic() +
+  facet_wrap(~name, scales = "free", nrow = 4)
+
+```
+
+There are some outliers here for sure but lets roll with the data as is. 
+
+Before we model with 5 clusters (the same amount of positions on an NBA team) Lets look at the position counts as it stands today.
+```{r}
+sdf %>% 
+  group_by(pos) %>%
+  summarise(n = n()) %>% 
+  ggplot(aes(n, pos, fill = pos)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+```
+
+```{r five_model, include=FALSE}
+five_model <- df %>% 
+  select(-player) %>% 
+  kmeans(centers = 5)
+# summary(five_model)
+
+tidy(five_model) %>% print()
+```
+
+```{r}
+df$clus_5 <- five_model$cluster
+df$clus_5 <- df$clus_5 %>% as.character()
+
+df %>% 
+  group_by(clus_5) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(n, clus_5, fill = clus_5)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+df %>% 
+  ggplot(aes(pts, ast, color = clus_5)) +
+  geom_point() + 
+  theme_classic()
+
+  
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# df %>% 
+#   group_by(clus_5) %>%
+#   pivot_longer(where(is.numeric)) %>% 
+#   ggplot(aes(value, fill = clus_5)) +
+#   geom_density() +
+#   theme_classic() +
+#   facet_wrap(vars(clus_5, name), ncol = 1)
+
+for (col in colnames(df[,2:20])) {
+  # print(col)
+  df$Y <- df[col] %>% unlist()
+  gg_tmp <- df %>% 
+    ggplot(aes(Y, fill = clus_5)) +
+    geom_density() +
+    theme_classic() +
+    xlab(col)
+  print(gg_tmp)
+}
+df %>% select(-Y)
+```
+
+
+```{r}
+pct <- function(x){
+  x/sum(x)
+}
+ 
+df %>%
+  select(-c(pos_C:pos_SG, Y)) %>% 
+  group_by(clus_5) %>%
+  summarise_if(is.numeric, sum) %>% 
+  summarise_if(is.numeric, pct) %>% 
+  round(2) 
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
