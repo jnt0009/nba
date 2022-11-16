@@ -14,3 +14,5 @@ players <- players %>%
 
 
 players %>% write.csv("./data/player_stats.csv")
+
+
