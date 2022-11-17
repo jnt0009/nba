@@ -2,3 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
+stash.R
+player_stats.csv

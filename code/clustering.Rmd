@@ -56,8 +56,8 @@ df <- df %>%
 
 Now let's take a look at what the distribution of the stats look like overall
 
-```{r all_stats}
-df %>% 
+```{r all_stats, echo=FALSE}
+mdf %>% 
   pivot_longer(where(is.numeric), names_to = "stat") %>% 
   ggplot(aes(pos, value, fill = pos)) +
   geom_boxplot(alpha = 0.4) +
@@ -70,7 +70,7 @@ There are some outliers here for sure but lets roll with the data as is.
 
 Before we model with 5 clusters (the same amount of positions on an NBA team) Lets look at the position counts as it stands today.
 
-```{r}
+```{r echo=FALSE}
 sdf %>% 
   group_by(pos) %>%
   summarise(n = n()) %>% 
@@ -79,7 +79,7 @@ sdf %>%
   theme_classic()
 ```
 
-```{r five_model, include=FALSE}
+```{r five_model, echo=FALSE}
 five_model <- df %>% 
   select(-player) %>% 
   kmeans(centers = 5)
@@ -88,7 +88,9 @@ five_model <- df %>%
 tidy(five_model) %>% print()
 ```
 
-```{r}
+Let's take a look at the amount of players in each of the different clusters.
+
+```{r echo=FALSE}
 df$clus_5 <- five_model$cluster
 df$clus_5 <- df$clus_5 %>% as.character()
 
@@ -106,6 +108,8 @@ df %>%
 
   
 ```
+
+Now let's take a looks at how each cluster stacks up against each other for every stat.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # df %>% 
@@ -129,7 +133,7 @@ for (col in colnames(df[,2:20])) {
 df %>% select(-Y)
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 pct <- function(x){
   x/sum(x)
 }
@@ -144,89 +148,130 @@ df %>%
 
 ```
 
-After Looking at all this I am going to need a different strategy.
 
--   I can make a model that predicts given positions and get it really good then have it predict the players and cluster them that way
--   I can grab only starters and try this again because the current model is really good at predicting playing time/impact.
+So it looks like our model has separated the players on skill. We'll notice that the
 
-We'll go with the latter first then the former if I don't like those outcomes either.
+- Red group (1) are the top players.  
+- Blue group (4) are the next best players
+- Green group (3) are likely role players 
+- Yellow group (2) are the lower tier players
+- Pink group (5) are likely young players and lower tier palyers.
 
-Here are some charts showing us Minutes Played and Games Started
+Now that I've made the claim let me try and back it up.
 
-```{r gs_mp_charts, echo=FALSE, message=FALSE, warning=FALSE}
+### Pink Group - 5
 
-mdf %>% 
-  ggplot(aes(mp)) +
-  geom_density() +
-  xlab("Minutes Played") +
+```{r}
+df |> 
+  filter(clus_5 == "5") |> 
+  summarise(
+    centers = sum(pos_C),
+    power_forwards = sum(pos_PF),
+    small_forwards = sum(pos_SF),
+    shooting_guards = sum(pos_SG),
+    point_guards = sum(pos_PG)
+  )
+```
+A lot of shooting guards in this group but then again there are more shooting guards in the league than anything else as we saw above.
+
+I called this group either 1 of 2 things.  Lower Tier players or younger players. So let's take a look at the general ages of the players. 
+```{r echo=FALSE}
+pink <- df |> 
+  filter(clus_5 == "5")
+
+df |> 
+  ggplot(aes(clus_5, age, fill = clus_5)) +
+  geom_boxplot() +
   theme_classic()
 
+df |> 
+  group_by(clus_5) |> 
+  select(age) |> 
+  summarise(
+    average_age = round(mean(age), 2),
+    oldest = max(age),
+    youngest = min(age),
+    median_age = median(age)
+  )
 
-mdf %>% 
-  ggplot(aes(mp, fill = pos )) +
+df |> 
+  ggplot(aes(age, fill = clus_5)) +
   geom_density() +
-  xlab("Minutes Played") +
+  facet_wrap(~clus_5, ncol = 1) +
   theme_classic()
-
-mdf %>% 
-  select(pos, mp) %>% 
-  ggplot(aes(mp, fill = pos)) +  
-  geom_density() +
-  xlab("Minutes Played") +
-  theme_classic() +
-  facet_wrap(~pos)
-
-mdf %>% 
-  ggplot(aes(gs)) +
-  geom_density() +
-  xlab("Games Started") +
-  theme_classic()
-
-
-mdf %>% 
-  ggplot(aes(gs, fill = pos )) +
-  geom_density() +
-  xlab("Games Started") +
-  theme_classic()
-
-mdf %>% 
-  ggplot(aes(gs, fill = pos)) +  
-  geom_density() +
-  xlab("Games Started") +
-  theme_classic() +
-  facet_wrap(~pos)
-
-mean_gs <- mean(mdf$gs)
 
 ```
 
-we can see that the mean number of games started is `r mean_gs` so I'll make `r ceiling(mean_gs)` The cutoff for being called a starter.
+So I think we can see that the pink group is the youngest of the 5 groups.  So now let's see the minutes played and games started from each of groups.  We expect the Pink group to have noticably less than the other groups.
 
-```{r starters, echo=FALSE, message=FALSE, warning=FALSE}
-starters <- mdf %>% 
-  filter(gs >= ceiling(mean_gs))
+```{r echo=FALSE}
+df |> 
+  ggplot(aes(clus_5, mp, fill = clus_5)) +
+  geom_boxplot(alpha = 4 ) +
+  theme_classic()
 
 ```
 
-This leaves us with `r length(starters$player)` In a perfect world we would have 150
+Bingo looks like we got quite a few end of the bench guys.  
+They're also averaging less than a start and only have `r sum(subset(df, clus_5 == '5')$gs)` starts between them.  
 
-```{r starters_x_pos, echo=FALSE, message=FALSE, warning=FALSE}
-
-starters %>% 
-  group_by(pos) %>%
-  summarise(n = n()) %>% 
-  ggplot(aes(n, pos, fill = pos)) +
-  geom_bar(stat = "identity") +
-  theme_classic() +
-  xlab("# of Players") +
-  ylab("Position") +
-  ggtitle("Starts By Position")
+```{r echo=FALSE}
+df |> 
+  group_by(clus_5) |> 
+  summarise(
+    mean_starts = round(mean(gs), 2),
+    total_starts = sum(gs)
+  )
 
 
 ```
 
-Now let's begin to train a model to id position
 
-## TODO: Train an xgboost
+So who are some the players in Group 5?
+
+```{r echo=FALSE}
+rbind(
+df |> 
+  filter(clus_5 == 5) |> 
+  slice_max(age, n = 1) |> 
+  mutate( Fact = "Oldest", reb = orb+drb),                                 
+
+df |> 
+  filter(clus_5 == 5) |> 
+  slice_min(age, n = 1) |> 
+  mutate( Fact = "Youngest", reb = orb+drb),
+
+df |> 
+  filter(clus_5 == 5) |> 
+  slice_max(pts, n = 1) |> 
+  mutate( Fact = "Top Scorer", reb = orb+drb),
+
+df |> 
+  filter(clus_5 == 5) |> 
+  slice_max(ast, n = 1) |> 
+  mutate( Fact = "Assist Leader", reb = orb+drb),
+
+df |> 
+  filter(clus_5 == 5) |> 
+  slice_max(orb+drb, n = 1) |> 
+  mutate( Fact = "Most Rebounds", reb = orb+drb),
+
+df |> 
+  filter(clus_5 == 5) |> 
+  slice_max(stl, n = 1) |> 
+  mutate( Fact = "Most Steals", reb = orb+drb),
+
+df |> 
+  filter(clus_5 == 5) |> 
+  slice_max(blk, n = 1) |> 
+  mutate( Fact = "Most Blocks", reb = orb+drb)
+) |> 
+  select(
+    Fact,
+    age, pts, ast, reb, stl, blk
+  ) |> 
+  arrange(Fact)
+
+```
 
 
