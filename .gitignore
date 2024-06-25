@@ -4,3 +4,4 @@
 .Ruserdata
 stash.R
 player_stats.csv
+*.csv
