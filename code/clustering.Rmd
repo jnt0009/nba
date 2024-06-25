@@ -8,10 +8,12 @@ pacman::p_load(
   "janitor",
   "recipes",
   "tidyr",
-  "ggplot2"
+  "ggplot2",
+  "knitr",
+  "kableExtra"
 )
 
-
+# source("season_data.R")
 set.seed(504)
 # source("season_data.R") 
 df <- read_csv("../data/player_stats.csv") %>% clean_names() %>% select(-x1)
@@ -40,7 +42,11 @@ df <- df %>% select(all_of(keep))
 ```
 
 ```{r peak, echo=FALSE}
-df %>% head()
+df %>% 
+  head() |> 
+  kable(booktabs = TRUE) |> 
+  kable_styling(font_size = 8)
+
 ```
 
 Next we need to encode some of these categorical values.
@@ -60,7 +66,7 @@ Now let's take a look at what the distribution of the stats look like overall
 mdf %>% 
   pivot_longer(where(is.numeric), names_to = "stat") %>% 
   ggplot(aes(pos, value, fill = pos)) +
-  geom_boxplot(alpha = 0.4) +
+  geom_boxplot(alpha = 4) +
   theme_classic() +
   facet_wrap(~stat, scales = "free")
 
@@ -143,7 +149,10 @@ df %>%
   group_by(clus_5) %>%
   summarise_if(is.numeric, sum) %>% 
   summarise_if(is.numeric, pct) %>% 
-  round(2) 
+  round(2) |> 
+  kable(booktabs = TRUE) |> 
+  kable_styling(font_size = 8)
+
 
 
 ```
@@ -152,14 +161,14 @@ df %>%
 So it looks like our model has separated the players on skill. We'll notice that the
 
 - Red group (1) are the top players.  
-- Blue group (4) are the next best players
-- Green group (3) are likely role players 
-- Yellow group (2) are the lower tier players
-- Pink group (5) are likely young players and lower tier palyers.
+- Pink group (5) are the next best players
+- Yellow group (2) are likely role players 
+- Green group (3) are the lower tier players
+- Blue group (4) are likely young players and lower tier palyers.
 
 Now that I've made the claim let me try and back it up.
 
-### Pink Group - 5
+### Blue Group - 4
 
 ```{r}
 df |> 
@@ -170,15 +179,15 @@ df |>
     small_forwards = sum(pos_SF),
     shooting_guards = sum(pos_SG),
     point_guards = sum(pos_PG)
-  )
+  ) |> 
+  kable(booktabs = TRUE) |> 
+  kable_styling(font_size = 8)
+
 ```
 A lot of shooting guards in this group but then again there are more shooting guards in the league than anything else as we saw above.
 
 I called this group either 1 of 2 things.  Lower Tier players or younger players. So let's take a look at the general ages of the players. 
 ```{r echo=FALSE}
-pink <- df |> 
-  filter(clus_5 == "5")
-
 df |> 
   ggplot(aes(clus_5, age, fill = clus_5)) +
   geom_boxplot() +
@@ -192,17 +201,19 @@ df |>
     oldest = max(age),
     youngest = min(age),
     median_age = median(age)
-  )
+  ) |> 
+  kable(booktabs = TRUE) |> 
+  kable_styling(font_size = 8)
 
 df |> 
   ggplot(aes(age, fill = clus_5)) +
   geom_density() +
   facet_wrap(~clus_5, ncol = 1) +
-  theme_classic()
+  theme_classic() 
 
 ```
 
-So I think we can see that the pink group is the youngest of the 5 groups.  So now let's see the minutes played and games started from each of groups.  We expect the Pink group to have noticably less than the other groups.
+So I think we can see that the Blue group is the youngest of the 5 groups.  So now let's see the minutes played and games started from each of groups.  We expect the Pink group to have noticeably less than the other groups.
 
 ```{r echo=FALSE}
 df |> 
@@ -221,13 +232,13 @@ df |>
   summarise(
     mean_starts = round(mean(gs), 2),
     total_starts = sum(gs)
-  )
+  ) 
 
 
 ```
 
 
-So who are some the players in Group 5?
+So who are some the players in Group 4?
 
 ```{r echo=FALSE}
 rbind(
@@ -267,11 +278,114 @@ df |>
   mutate( Fact = "Most Blocks", reb = orb+drb)
 ) |> 
   select(
+    player,
     Fact,
     age, pts, ast, reb, stl, blk
   ) |> 
-  arrange(Fact)
+  arrange(Fact) |> 
+  kable(booktabs = TRUE) |> 
+  kable_styling(font_size = 8)
 
 ```
+### Red group - 1
+
+I said that these players are the cream of the crop. We've already seen the stats by cluster in the anlysis above so let's approach this a different way.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+df |> 
+  pivot_longer(pos_C:pos_SG) |>
+  filter(value == 1) |>
+  group_by(name) |>
+  slice_max(mp, n = 1) |> 
+  select(player, name, mp, clus_5) |> 
+  kable(booktabs = TRUE) |> 
+  kable_styling(font_size = 8)
+
+```
+
+So we can see that Red Group 1 has the most players with the top minutes played by a position.  It is however interesting that there are 2 Pink group-5 members making there way onto the list.  This tells me our model may not value big men enough.
+
+Lets check in on the rebound leaders and there cluster grouping.
+
+```{r echo=FALSE}
+df |> 
+  pivot_longer(pos_C:pos_SG) |> 
+  filter(value == 1) |> 
+  mutate(trb = orb + drb) |> 
+  group_by(name) |> 
+  slice_max(trb, n=5) |> 
+  select(-c(Y, value)) |> 
+  arrange(desc(orb+ drb)) |> 
+  arrange(name) |>
+  kable(booktabs = TRUE) |> 
+  kable_styling(font_size = 8) |> 
+  column_spec(14, color = "grey", bold = T, border_left = T, border_right = T) |> 
+  column_spec(15, color = "grey", bold = T, border_right = T) 
+
+```
+
+let's keep looking at this one.  We can filter out anyone who is not a top 5 player in at least 1 category.  Lets see how this shakes out. 
+
+```{r echo=FALSE}
+
+z <- function(x) {
+  rank(desc(x))
+}
+
+
+tmp <- df |>
+  pivot_longer(pos_C:pos_SG) |>
+  filter(value == 1) |>
+  select(c(player, mp:pts, name)) |>
+  mutate_if(is.numeric, z) |>
+  arrange(mp) |>
+  mutate_if(is.numeric, floor) |>
+  mutate(pos = name) |>
+  select(-name) |>
+  pivot_longer(cols = mp:pts) |>
+  filter(value <= 5)
+
+df |>
+  filter(player %in% tmp$player) |>
+  select(player, mp:pts, clus_5) |> 
+  group_by(clus_5) |> 
+  summarise(n = n()) |> 
+  ggplot(aes(n, clus_5, fill = clus_5)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+  
+# 
+# tmp |>
+#   kable(booktabs = TRUE) |>
+#   kable_styling(font_size = 8)
+# 
+# df |>
+#   filter(player %in% tmp$player) |>
+#   select(mp:pts, clus_5) |>
+#   kable(booktabs = TRUE) |>
+#   kable_styling(font_size = 8)
+
+  # group_by(name)
+  # mutate_at(c(mp:fg), )
+```
+
+Notice that there are no group 4 people on the list.
+
+As a reminder this is the break down of all players by cluster 
+
+```{r echo=FALSE}
+
+df |>
+  select(player, mp:pts, clus_5) |> 
+  group_by(clus_5) |> 
+  summarise(n = n()) |> 
+  ggplot(aes(n, clus_5, fill = clus_5)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+```
+
+So the amount of cluster 1 folks leading the lead is telling.
+
 
 
